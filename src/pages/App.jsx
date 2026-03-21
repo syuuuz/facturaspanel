@@ -241,7 +241,7 @@ function QRReal({ url, size = 100, color = "#111827" }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // 3. INVOICE ENGINE — Reads config_diseno JSON and renders dynamically
 // ─────────────────────────────────────────────────────────────────────────────
-function InvoiceEngine({ invoice, empresa, forExport = false }) {
+function InvoiceEngine({ invoice, empresa, forExport = false, qrDataUrl = null }) {
   const dna = empresa.config_diseno || generateCompanyVisualDNA();
   const { layout, fonts, palette, tableStyle, borderRadius } = dna;
   const t = calcTotals(invoice.lineas || []);
@@ -286,7 +286,10 @@ function InvoiceEngine({ invoice, empresa, forExport = false }) {
   const QRBlock = ({ size = 80 }) => (
     <div style={{ textAlign: "center" }}>
       <div style={{ background: "#fff", padding: 6, borderRadius: 8, display: "inline-block", border: "1px solid #E5E7EB" }}>
-        <QRReal url={qrUrl} size={size} color={palette.primary} />
+        {qrDataUrl
+          ? <img src={qrDataUrl} width={size} height={size} alt="QR" style={{ display: "block", borderRadius: 4 }} />
+          : <QRReal url={qrUrl} size={size} color={palette.primary} />
+        }
       </div>
       <p style={{ fontSize: 9, color: "#9CA3AF", marginTop: 4, fontFamily: fonts.body }}>Verificar factura</p>
     </div>
@@ -602,6 +605,20 @@ function InvoiceEngine({ invoice, empresa, forExport = false }) {
 // PDF EXPORT — html2canvas → jsPDF (800px fixed width, white background)
 // ─────────────────────────────────────────────────────────────────────────────
 async function exportInvoicePDF(invoice, empresa, toast) {
+  // Pre-generar QR data URL antes de renderizar (evita que html2canvas lo capture en blanco)
+  const qrUrl = `https://facturaspanel.vercel.app/f/${invoice.id}`;
+  const dna = empresa.config_diseno;
+  const qrColor = dna?.palette?.primary || "#111827";
+  let qrDataUrl = "";
+  try {
+    qrDataUrl = await QRCode.toDataURL(qrUrl, {
+      width: 320,
+      margin: 1,
+      color: { dark: qrColor, light: "#ffffff" },
+      errorCorrectionLevel: "M",
+    });
+  } catch (e) { console.warn("QR pre-gen error:", e); }
+
   // Dynamic imports so bundle stays lean when not used
   const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
     import("html2canvas"),
@@ -613,13 +630,13 @@ async function exportInvoicePDF(invoice, empresa, toast) {
   container.style.cssText = "position:fixed;left:-9999px;top:0;width:800px;background:#fff;z-index:-1;";
   document.body.appendChild(container);
 
-  // Render InvoiceEngine into it via a temporary React root
+  // Render InvoiceEngine con el QR ya pre-generado
   const { createRoot } = await import("react-dom/client");
   const root = createRoot(container);
-  root.render(<InvoiceEngine invoice={invoice} empresa={empresa} forExport={true} />);
+  root.render(<InvoiceEngine invoice={invoice} empresa={empresa} forExport={true} qrDataUrl={qrDataUrl} />);
 
-  // Wait one frame for render
-  await new Promise(r => setTimeout(r, 300));
+  // Esperar a que React renderice
+  await new Promise(r => setTimeout(r, 400));
 
   try {
     const canvas = await html2canvas(container, {
