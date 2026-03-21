@@ -25,16 +25,16 @@ function QRSvg({ id, size = 80 }) {
   const h = id.split('').reduce((a, c) => a + c.charCodeAt(0), 0)
   const pat = Array.from({ length: cells }, (_, r) =>
     Array.from({ length: cells }, (_, c) => {
-      if (r < 7 && c < 7) return r===0||r===6||c===0||c===6||(r>=2&&r<=4&&c>=2&&c<=4)
-      if (r < 7 && c > cells-8) return r===0||r===6||c===cells-1||c===cells-7||(r>=2&&r<=4&&c>=cells-5&&c<=cells-3)
-      if (r > cells-8 && c < 7) return r===cells-1||r===cells-7||c===0||c===6||(r>=cells-5&&r<=cells-3&&c>=2&&c<=4)
-      return ((h*(r*cells+c+1)*2654435761)&1)===1
+      if (r < 7 && c < 7) return r === 0 || r === 6 || c === 0 || c === 6 || (r >= 2 && r <= 4 && c >= 2 && c <= 4)
+      if (r < 7 && c > cells - 8) return r === 0 || r === 6 || c === cells - 1 || c === cells - 7 || (r >= 2 && r <= 4 && c >= cells - 5 && c <= cells - 3)
+      if (r > cells - 8 && c < 7) return r === cells - 1 || r === cells - 7 || c === 0 || c === 6 || (r >= cells - 5 && r <= cells - 3 && c >= 2 && c <= 4)
+      return ((h * (r * cells + c + 1) * 2654435761) & 1) === 1
     })
   )
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
       {pat.flatMap((row, r) => row.map((on, c) =>
-        on ? <rect key={`${r}-${c}`} x={c*cs} y={r*cs} width={cs} height={cs} fill="currentColor" /> : null
+        on ? <rect key={`${r}-${c}`} x={c * cs} y={r * cs} width={cs} height={cs} fill="currentColor" /> : null
       ))}
     </svg>
   )
@@ -42,10 +42,10 @@ function QRSvg({ id, size = 80 }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function FacturaPublica() {
-  const { uuid }          = useParams()
+  const { uuid } = useParams()
   const [factura, setFactura] = useState(null)
   const [empresa, setEmpresa] = useState(null)
-  const [error, setError]     = useState(null)
+  const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -102,12 +102,12 @@ export default function FacturaPublica() {
 
   if (!factura) return null
 
-  const items   = Array.isArray(factura.items) ? factura.items : []
-  const dna     = empresa?.config_diseno
+  const items = Array.isArray(factura.items) ? factura.items : []
+  const dna = empresa?.config_diseno
   const primary = dna?.palette?.primary || '#111827'
-  const accent  = dna?.palette?.accent  || '#2563EB'
-  const hFont   = dna?.fonts?.heading   || "'Plus Jakarta Sans', sans-serif"
-  const bFont   = dna?.fonts?.body      || "'Plus Jakarta Sans', sans-serif"
+  const accent = dna?.palette?.accent || '#2563EB'
+  const hFont = dna?.fonts?.heading || "'Plus Jakarta Sans', sans-serif"
+  const bFont = dna?.fonts?.body || "'Plus Jakarta Sans', sans-serif"
 
   return (
     <div style={{ background: '#F9FAFB', minHeight: '100vh', padding: '32px 16px', fontFamily: bFont }}>
@@ -120,7 +120,7 @@ export default function FacturaPublica() {
             Factura verificada
           </span>
           <span style={{ fontSize: 12, color: '#9CA3AF', marginLeft: 'auto' }}>
-            facturaismael.vercel.app
+            facturaspanel.vercel.app
           </span>
         </div>
 
@@ -201,7 +201,7 @@ export default function FacturaPublica() {
                   </thead>
                   <tbody>
                     {items.map((l, i) => {
-                      const base  = (parseFloat(l.cantidad) || 0) * (parseFloat(l.precioUnitario) || 0)
+                      const base = (parseFloat(l.cantidad) || 0) * (parseFloat(l.precioUnitario) || 0)
                       const total = base + base * (parseFloat(l.iva) || 0) / 100
                       return (
                         <tr key={l.id || i} style={{ background: i % 2 ? '#F9FAFB' : '#fff', borderBottom: '1px solid #F3F4F6' }}>

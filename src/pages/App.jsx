@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import QRCode from "qrcode";
 import { supabase } from "../lib/supabaseClient.js";
 import {
   Plus, Trash2, FileText, ChevronRight, CheckCircle,
@@ -220,26 +221,21 @@ function ConfirmModal({ title, description, onConfirm, onCancel }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// QR SVG (deterministic pattern from UUID)
+// QR REAL — genera un QR auténtico con la librería qrcode
 // ─────────────────────────────────────────────────────────────────────────────
-function QRSvg({ id, size = 100, color = "currentColor" }) {
-  const cells = 21, cs = size / cells;
-  const h = id.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-  const pat = Array.from({ length: cells }, (_, r) =>
-    Array.from({ length: cells }, (_, c) => {
-      if (r < 7 && c < 7) return r === 0 || r === 6 || c === 0 || c === 6 || (r >= 2 && r <= 4 && c >= 2 && c <= 4);
-      if (r < 7 && c > cells - 8) return r === 0 || r === 6 || c === cells - 1 || c === cells - 7 || (r >= 2 && r <= 4 && c >= cells - 5 && c <= cells - 3);
-      if (r > cells - 8 && c < 7) return r === cells - 1 || r === cells - 7 || c === 0 || c === 6 || (r >= cells - 5 && r <= cells - 3 && c >= 2 && c <= 4);
-      return ((h * (r * cells + c + 1) * 2654435761) & 1) === 1;
-    })
-  );
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      {pat.flatMap((row, r) => row.map((on, c) =>
-        on ? <rect key={`${r}-${c}`} x={c * cs} y={r * cs} width={cs} height={cs} fill={color} /> : null
-      ))}
-    </svg>
-  );
+function QRReal({ url, size = 100, color = "#111827" }) {
+  const [dataUrl, setDataUrl] = useState("");
+  useEffect(() => {
+    if (!url) return;
+    QRCode.toDataURL(url, {
+      width: size * 2,
+      margin: 1,
+      color: { dark: color, light: "#ffffff" },
+      errorCorrectionLevel: "M",
+    }).then(setDataUrl).catch(console.error);
+  }, [url, size, color]);
+  if (!dataUrl) return <div style={{ width: size, height: size, background: "#F3F4F6", borderRadius: 6 }} />;
+  return <img src={dataUrl} width={size} height={size} alt="QR" style={{ display: "block", borderRadius: 4 }} />;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -249,7 +245,7 @@ function InvoiceEngine({ invoice, empresa, forExport = false }) {
   const dna = empresa.config_diseno || generateCompanyVisualDNA();
   const { layout, fonts, palette, tableStyle, borderRadius } = dna;
   const t = calcTotals(invoice.lineas || []);
-  const qrUrl = `https://facturaismael.vercel.app/f/${invoice.id}`;
+  const qrUrl = `https://facturaspanel.vercel.app/f/${invoice.id}`;
   const br = forExport ? Math.min(borderRadius, 8) : borderRadius;
 
   // Table row styles based on tableStyle
@@ -290,7 +286,7 @@ function InvoiceEngine({ invoice, empresa, forExport = false }) {
   const QRBlock = ({ size = 80 }) => (
     <div style={{ textAlign: "center" }}>
       <div style={{ background: "#fff", padding: 6, borderRadius: 8, display: "inline-block", border: "1px solid #E5E7EB" }}>
-        <QRSvg id={invoice.id} size={size} color={palette.primary} />
+        <QRReal url={qrUrl} size={size} color={palette.primary} />
       </div>
       <p style={{ fontSize: 9, color: "#9CA3AF", marginTop: 4, fontFamily: fonts.body }}>Verificar factura</p>
     </div>
@@ -654,7 +650,7 @@ async function exportInvoicePDF(invoice, empresa, toast) {
 // INVOICE PREVIEW MODAL (uses InvoiceEngine)
 // ─────────────────────────────────────────────────────────────────────────────
 function InvoicePreviewModal({ invoice, empresa, onClose, onPDF, pdfLoading }) {
-  const qrUrl = `https://facturaismael.vercel.app/f/${invoice.id}`;
+  const qrUrl = `https://facturaspanel.vercel.app/f/${invoice.id}`;
   return (
     <div className="modal-backdrop" style={{ alignItems: "flex-start", paddingTop: 32, paddingBottom: 32, overflow: "auto" }}>
       <div style={{ width: 860, maxWidth: "95vw" }}>
@@ -839,7 +835,7 @@ function InvoiceEditor({ invoice, empresa, onChange, onPersist, onEmit, onPrevie
       {locked && (
         <div className="locked-banner">
           <CheckCircle size={15} />
-          <span>Factura emitida · edición bloqueada · URL pública: <strong>facturaismael.vercel.app/f/{invoice.id}</strong></span>
+          <span>Factura emitida · edición bloqueada · URL pública: <strong>facturaspanel.vercel.app/f/{invoice.id}</strong></span>
         </div>
       )}
 
@@ -895,7 +891,7 @@ function InvoiceEditor({ invoice, empresa, onChange, onPersist, onEmit, onPrevie
                       <td style={{ width: "15%" }}><input type="number" className="input cell-input" style={{ textAlign: "right" }} value={l.precioUnitario} onChange={e => setL(l.id, "precioUnitario", e.target.value)} disabled={locked} step="0.01" /></td>
                       <td style={{ width: "10%" }}>
                         <select className="input cell-input" value={l.iva} onChange={e => setL(l.id, "iva", parseFloat(e.target.value))} disabled={locked}>
-                          {[0, 4, 10, 21].map(r => <option key={r} value={r}>{r}%</option>)}
+                          {[0, 4, 10, 21, 23].map(r => <option key={r} value={r}>{r}%</option>)}
                         </select>
                       </td>
                       <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", fontSize: 13, color: "var(--text-primary)", fontWeight: 600, paddingRight: 12 }}>{fmt(total)}</td>
@@ -922,14 +918,14 @@ function InvoiceEditor({ invoice, empresa, onChange, onPersist, onEmit, onPrevie
             <p className="section-label">Código QR de verificación</p>
             <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
               <div className="qr-box" style={{ color: dna?.palette?.primary || "var(--text-primary)" }}>
-                <QRSvg id={invoice.id} size={100} color={dna?.palette?.primary || "#111827"} />
+                <QRReal url={`https://facturaspanel.vercel.app/f/${invoice.id}`} size={100} color={dna?.palette?.primary || "#111827"} />
               </div>
               <div>
                 <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>Enlace público de la factura</p>
                 <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10 }}>El cliente puede escanear este QR para verificar la autenticidad.</p>
                 <div className="qr-url-row">
-                  <code className="qr-url">facturaismael.vercel.app/f/{invoice.id}</code>
-                  <button className="icon-btn" onClick={() => navigator.clipboard?.writeText(`https://facturaismael.vercel.app/f/${invoice.id}`)}><Copy size={13} /></button>
+                  <code className="qr-url">facturaspanel.vercel.app/f/{invoice.id}</code>
+                  <button className="icon-btn" onClick={() => navigator.clipboard?.writeText(`https://facturaspanel.vercel.app/f/${invoice.id}`)}><Copy size={13} /></button>
                 </div>
               </div>
             </div>
@@ -1162,6 +1158,7 @@ export default function App() {
   const [dark, setDark] = useState(() => { try { return JSON.parse(localStorage.getItem("cf_dark")) ?? false; } catch { return false; } });
   const [empresas, setEmpresas] = useState([]);
   const [facturas, setFacturas] = useState([]);
+  const [dbLoading, setDbLoading] = useState(true);
   const [activeEmpresaId, setActiveEmpresaId] = useState(null);
   const [sideNav, setSideNav] = useState("facturas");
   const [activeFacturaId, setActiveFacturaId] = useState(null);
@@ -1173,37 +1170,82 @@ export default function App() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Load
+  // ── Cargar desde Supabase al hacer login ──
   useEffect(() => {
-    const s = load();
-    setEmpresas(s.empresas || []);
-    setFacturas(s.facturas || []);
-  }, []);
+    if (!session) return;
+    async function cargarDatos() {
+      setDbLoading(true);
+      try {
+        const userId = session.user.id;
+        const [{ data: emps }, { data: facts }] = await Promise.all([
+          supabase.from("empresas").select("*").eq("user_id", userId).order("created_at"),
+          supabase.from("facturas").select("*").eq("user_id", userId).order("created_at"),
+        ]);
+        setEmpresas(emps || []);
+        // Normalizar facturas: convertir snake_case de Supabase → camelCase del frontend
+        setFacturas((facts || []).map(f => ({
+          id: f.id,
+          empresaId: f.empresa_id,
+          numeroFactura: f.numero,
+          fecha: f.fecha,
+          estado: f.estado,
+          clienteNombre: f.cliente_nombre || "",
+          clienteNif: f.cliente_nif || "",
+          clienteDireccion: f.cliente_dir || "",
+          encabezadoLibre: f.encabezado || "",
+          piePagina: f.pie_pagina || "",
+          lineas: Array.isArray(f.items) ? f.items : [],
+        })));
+      } catch (e) {
+        console.error("Error cargando datos:", e);
+      } finally {
+        setDbLoading(false);
+      }
+    }
+    cargarDatos();
+  }, [session]);
 
-  // Persist all state
+  // Guardar modo oscuro en localStorage (preferencia local)
   useEffect(() => {
-    persist({ empresas, facturas });
     localStorage.setItem("cf_dark", JSON.stringify(dark));
-  }, [empresas, facturas, dark]);
+  }, [dark]);
 
   const activeEmpresa = empresas.find(e => e.id === activeEmpresaId);
   const companyInvoices = facturas.filter(f => f.empresaId === activeEmpresaId);
   const activeFactura = facturas.find(f => f.id === activeFacturaId);
-  const isLocked = activeFactura?.estado === "Emitida"
+  const isLocked = activeFactura?.estado === "Emitida";
 
   // ── All hooks must be declared before any conditional return ────────────────
-  // This callback is here (not after the auth guards) to satisfy Rules of Hooks
   const handleAutoPersist = useCallback(async (invoice) => {
     setFacturas(p => p.map(f => f.id === invoice.id ? invoice : f));
-    persist({ empresas, facturas: facturas.map(f => f.id === invoice.id ? invoice : f) });
-  }, [empresas, facturas]);
+    try {
+      const { subtotal, totalIva: iva, total } = calcTotals(invoice.lineas || []);
+      await supabase.from("facturas").upsert({
+        id: invoice.id,
+        user_id: session.user.id,
+        empresa_id: invoice.empresaId,
+        numero: invoice.numeroFactura,
+        fecha: invoice.fecha,
+        estado: invoice.estado,
+        cliente_nombre: invoice.clienteNombre,
+        cliente_nif: invoice.clienteNif,
+        cliente_dir: invoice.clienteDireccion,
+        encabezado: invoice.encabezadoLibre,
+        pie_pagina: invoice.piePagina,
+        items: invoice.lineas,
+        subtotal, iva, total,
+        empresa_snapshot: null,
+      });
+    } catch (e) { console.error("Autosave error:", e); }
+  }, [session]);
 
   const filteredEmpresas = empresas.filter(e => e.nombre.toLowerCase().includes(dirSearch.toLowerCase()));
 
   // ── Auth guards (AFTER all hooks) ────────────────────────────────────────────
-  if (authLoading) return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#F9FAFB", fontFamily: "sans-serif" }}>
+  if (authLoading || (session && dbLoading)) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#F9FAFB", fontFamily: "sans-serif", flexDirection: "column", gap: 12 }}>
       <div style={{ width: 32, height: 32, border: "3px solid #E5E7EB", borderTopColor: "#2563EB", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+      <p style={{ fontSize: 13, color: "#9CA3AF" }}>{session ? "Cargando datos…" : ""}</p>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
@@ -1217,37 +1259,54 @@ export default function App() {
   )
 
   // ── Empresa CRUD ──
-  const handleSaveEmpresa = () => {
+  const handleSaveEmpresa = async () => {
     if (!editingEmpresa?.nombre?.trim()) return;
+    const userId = session.user.id;
     if (editingEmpresa.id) {
-      setEmpresas(p => p.map(e => e.id === editingEmpresa.id ? editingEmpresa : e));
+      // Update
+      const updated = { ...editingEmpresa };
+      setEmpresas(p => p.map(e => e.id === updated.id ? updated : e));
+      await supabase.from("empresas").update({
+        nombre: updated.nombre, nif: updated.nif,
+        direccion: updated.direccion, logo: updated.logo,
+        config_diseno: updated.config_diseno,
+      }).eq("id", updated.id);
       toast("Empresa actualizada");
     } else {
-      // Generate DNA on creation
       const dna = generateCompanyVisualDNA();
-      const ne = { ...editingEmpresa, id: uuid(), config_diseno: dna };
+      const newId = uuid();
+      const ne = { ...editingEmpresa, id: newId, config_diseno: dna, user_id: userId };
       setEmpresas(p => [...p, ne]);
+      await supabase.from("empresas").insert({
+        id: newId, user_id: userId,
+        nombre: ne.nombre, nif: ne.nif,
+        direccion: ne.direccion, logo: ne.logo,
+        config_diseno: dna,
+      });
       toast(`✨ Empresa creada con ADN Visual único: ${dna.layout?.desc}`);
     }
     setShowNewEmpresa(false); setEditingEmpresa(null);
   };
 
-  const handleDeleteEmpresa = id => {
+  const handleDeleteEmpresa = async id => {
     setEmpresas(p => p.filter(e => e.id !== id));
     setFacturas(p => p.filter(f => f.empresaId !== id));
     if (activeEmpresaId === id) { setActiveEmpresaId(null); setActiveFacturaId(null); }
     setConfirmDelete(null);
+    await supabase.from("facturas").delete().eq("empresa_id", id);
+    await supabase.from("empresas").delete().eq("id", id);
     toast("Empresa y datos eliminados", "info");
   };
 
   // ── Factura CRUD ──
-  const handleNewFactura = () => {
+  const handleNewFactura = async () => {
     const usados = new Set(companyInvoices.map(f => f.numeroFactura));
     let n;
     do { n = Math.floor(Math.random() * 7000) + 3000; }
     while (usados.has(`FAC-${new Date().getFullYear()}-${n}`));
+    const newId = uuid();
     const f = {
-      id: uuid(), empresaId: activeEmpresaId,
+      id: newId, empresaId: activeEmpresaId,
       numeroFactura: `FAC-${new Date().getFullYear()}-${n}`,
       fecha: todayISO(), encabezadoLibre: "", piePagina: "",
       estado: "Borrador", clienteNombre: "", clienteNif: "", clienteDireccion: "",
@@ -1255,22 +1314,46 @@ export default function App() {
     };
     setFacturas(p => [...p, f]);
     setActiveFacturaId(f.id);
+    await supabase.from("facturas").insert({
+      id: newId, user_id: session.user.id, empresa_id: activeEmpresaId,
+      numero: f.numeroFactura, fecha: f.fecha, estado: f.estado,
+      cliente_nombre: "", cliente_nif: "", cliente_dir: "",
+      encabezado: "", pie_pagina: "", items: f.lineas,
+      subtotal: 0, iva: 0, total: 0, empresa_snapshot: null,
+    });
   };
 
   const handleFacturaChange = updated => setFacturas(p => p.map(f => f.id === updated.id ? updated : f));
 
-  // handleAutoPersist moved above auth guards to comply with Rules of Hooks
-
-  const handleEmitFactura = () => {
-    setFacturas(p => p.map(f => f.id === activeFacturaId ? { ...f, estado: "Emitida" } : f));
+  const handleEmitFactura = async () => {
+    const factura = facturas.find(f => f.id === activeFacturaId);
+    const empresa = empresas.find(e => e.id === activeEmpresaId);
+    const updated = { ...factura, estado: "Emitida" };
+    setFacturas(p => p.map(f => f.id === activeFacturaId ? updated : f));
+    const { subtotal, totalIva: iva, total } = calcTotals(updated.lineas || []);
+    // Guardar snapshot de la empresa para que el QR público siempre muestre los datos correctos
+    const snapshot = {
+      nombre: empresa.nombre, nif: empresa.nif,
+      direccion: empresa.direccion, logo_url: empresa.logo,
+      config_diseno: empresa.config_diseno,
+    };
+    await supabase.from("facturas").upsert({
+      id: updated.id, user_id: session.user.id, empresa_id: updated.empresaId,
+      numero: updated.numeroFactura, fecha: updated.fecha, estado: "Emitida",
+      cliente_nombre: updated.clienteNombre, cliente_nif: updated.clienteNif,
+      cliente_dir: updated.clienteDireccion, encabezado: updated.encabezadoLibre,
+      pie_pagina: updated.piePagina, items: updated.lineas,
+      subtotal, iva, total, empresa_snapshot: snapshot,
+    });
     toast("✅ Factura emitida y bloqueada");
     setPreviewFactura(activeFacturaId);
   };
 
-  const handleDeleteFactura = id => {
+  const handleDeleteFactura = async id => {
     setFacturas(p => p.filter(f => f.id !== id));
     if (activeFacturaId === id) setActiveFacturaId(null);
     setConfirmDelete(null);
+    await supabase.from("facturas").delete().eq("id", id);
     toast("Factura eliminada", "info");
   };
 
@@ -1665,9 +1748,19 @@ export default function App() {
               <SettingsPanel
                 empresa={activeEmpresa}
                 onChange={updated => setEmpresas(p => p.map(e => e.id === updated.id ? updated : e))}
-                onSave={() => toast("Configuración guardada")}
-                onRegenDNA={newDna => {
+                onSave={async () => {
+                  const emp = empresas.find(e => e.id === activeEmpresaId);
+                  if (!emp) return;
+                  await supabase.from("empresas").update({
+                    nombre: emp.nombre, nif: emp.nif,
+                    direccion: emp.direccion, logo: emp.logo,
+                    config_diseno: emp.config_diseno,
+                  }).eq("id", emp.id);
+                  toast("Configuración guardada");
+                }}
+                onRegenDNA={async newDna => {
                   setEmpresas(p => p.map(e => e.id === activeEmpresaId ? { ...e, config_diseno: newDna } : e));
+                  await supabase.from("empresas").update({ config_diseno: newDna }).eq("id", activeEmpresaId);
                   toast(`✨ Nuevo ADN: ${newDna.layout?.desc}`);
                 }}
               />
