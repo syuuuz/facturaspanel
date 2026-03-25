@@ -50,16 +50,16 @@ const contrastRatio = (hex1, hex2) => {
 // 1. MOTOR DE ADN VISUAL — generateCompanyVisualDNA()
 // ─────────────────────────────────────────────────────────────────────────────
 const PALETTES = [
-  { primary: "#1a1a2e", accent: "#e94560" },   // Noir + crimson
-  { primary: "#0d3b66", accent: "#f4d35e" },   // Navy + gold
-  { primary: "#1b4332", accent: "#52b788" },   // Forest + mint
-  { primary: "#370617", accent: "#f48c06" },   // Burgundy + amber
-  { primary: "#03045e", accent: "#00b4d8" },   // Ink + cyan
-  { primary: "#3d0066", accent: "#c77dff" },   // Plum + violet
-  { primary: "#212529", accent: "#20c997" },   // Charcoal + teal
-  { primary: "#1c1c1c", accent: "#ff6b35" },   // Obsidian + coral
-  { primary: "#2d3a3a", accent: "#ffd166" },   // Slate + yellow
-  { primary: "#2b2d42", accent: "#ef233c" },   // Space + red
+  { primary: "#1a1a2e", accent: "#e94560" },
+  { primary: "#0d3b66", accent: "#f4d35e" },
+  { primary: "#1b4332", accent: "#52b788" },
+  { primary: "#370617", accent: "#f48c06" },
+  { primary: "#03045e", accent: "#00b4d8" },
+  { primary: "#3d0066", accent: "#c77dff" },
+  { primary: "#212529", accent: "#20c997" },
+  { primary: "#1c1c1c", accent: "#ff6b35" },
+  { primary: "#2d3a3a", accent: "#ffd166" },
+  { primary: "#2b2d42", accent: "#ef233c" },
 ];
 
 const FONT_PAIRS = [
@@ -87,7 +87,6 @@ const TABLE_STYLES = [
   { id: "dark-header", desc: "Cabecera oscura fuerte" },
 ];
 
-// 8 layout variants for invoice rendering
 const LAYOUTS = [
   { id: "classic", desc: "Logo arriba · QR abajo" },
   { id: "right-logo", desc: "Logo derecha · QR izquierda" },
@@ -102,13 +101,11 @@ const LAYOUTS = [
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
 function generateCompanyVisualDNA() {
-  // Pick palette and ensure WCAG contrast >= 4.5
   let palette = pick(PALETTES);
   let attempts = 0;
   while (contrastRatio(palette.primary, "#ffffff") < 4.5 && attempts < 20) {
     palette = pick(PALETTES); attempts++;
   }
-
   return {
     layout: pick(LAYOUTS),
     fonts: pick(FONT_PAIRS),
@@ -120,12 +117,10 @@ function generateCompanyVisualDNA() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. AUTOSAVE HOOK — useAutosaveInvoice (debounce 500ms)
+// 2. AUTOSAVE HOOK
 // ─────────────────────────────────────────────────────────────────────────────
-// NOTE: In production, replace the persist() call inside with a Supabase upsert:
-//   await supabase.from("facturas").upsert({ id: invoice.id, ...invoice })
 function useAutosaveInvoice(invoice, onPersist) {
-  const [saveStatus, setSaveStatus] = useState("idle"); // idle | saving | saved | error
+  const [saveStatus, setSaveStatus] = useState("idle");
   const timerRef = useRef(null);
   const prevRef = useRef(null);
 
@@ -153,7 +148,6 @@ function useAutosaveInvoice(invoice, onPersist) {
   return saveStatus;
 }
 
-// Autosave status indicator component
 function SaveIndicator({ status }) {
   if (status === "idle") return null;
   const configs = {
@@ -170,7 +164,7 @@ function SaveIndicator({ status }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STORAGE (localStorage — replace with Supabase in production)
+// STORAGE
 // ─────────────────────────────────────────────────────────────────────────────
 const KEY = "cf_v3";
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
@@ -239,7 +233,7 @@ function QRReal({ url, size = 100, color = "#111827" }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3. INVOICE ENGINE — Reads config_diseno JSON and renders dynamically
+// 3. INVOICE ENGINE
 // ─────────────────────────────────────────────────────────────────────────────
 function InvoiceEngine({ invoice, empresa, forExport = false, qrDataUrl = null }) {
   const dna = empresa.config_diseno || generateCompanyVisualDNA();
@@ -248,7 +242,6 @@ function InvoiceEngine({ invoice, empresa, forExport = false, qrDataUrl = null }
   const qrUrl = `https://facturaspanel.vercel.app/f/${invoice.id}`;
   const br = forExport ? Math.min(borderRadius, 8) : borderRadius;
 
-  // Table row styles based on tableStyle
   const getRowStyle = (i, br) => {
     switch (tableStyle?.id) {
       case "zebra": return { background: i % 2 ? "#F9FAFB" : "#fff" };
@@ -272,7 +265,6 @@ function InvoiceEngine({ invoice, empresa, forExport = false, qrDataUrl = null }
 
   const W = forExport ? 800 : "100%";
 
-  // ── Logo block ──
   const LogoBlock = ({ size = 44, invert = false }) => (
     <div>
       {empresa.logo
@@ -282,7 +274,8 @@ function InvoiceEngine({ invoice, empresa, forExport = false, qrDataUrl = null }
     </div>
   );
 
-  // ── QR block ──
+  // ── QR Block: usa qrDataUrl si se pasó (para exportación con QR ciego),
+  //    si no, muestra el QR real funcional
   const QRBlock = ({ size = 80 }) => (
     <div style={{ textAlign: "center" }}>
       <div style={{ background: "#fff", padding: 6, borderRadius: 8, display: "inline-block", border: "1px solid #E5E7EB" }}>
@@ -295,7 +288,6 @@ function InvoiceEngine({ invoice, empresa, forExport = false, qrDataUrl = null }
     </div>
   );
 
-  // ── Shared table ──
   const LinesTable = () => (
     <div style={{ ...tableWrapStyle, marginBottom: 28 }}>
       <table style={{ width: "100%", borderCollapse: tableStyle?.id === "rounded" ? "separate" : "collapse", borderSpacing: tableStyle?.id === "rounded" ? "0 3px" : 0 }}>
@@ -325,7 +317,6 @@ function InvoiceEngine({ invoice, empresa, forExport = false, qrDataUrl = null }
     </div>
   );
 
-  // ── Totals block ──
   const TotalsBlock = () => (
     <div style={{ display: "flex", justifyContent: "flex-end" }}>
       <div style={{ width: 240, border: "1px solid #E5E7EB", borderRadius: br, overflow: "hidden" }}>
@@ -344,7 +335,6 @@ function InvoiceEngine({ invoice, empresa, forExport = false, qrDataUrl = null }
     </div>
   );
 
-  // ── Client & date meta ──
   const MetaBlock = () => (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 24, marginBottom: 32 }}>
       <div>
@@ -366,14 +356,12 @@ function InvoiceEngine({ invoice, empresa, forExport = false, qrDataUrl = null }
     </div>
   );
 
-  // ── Footer ──
   const FooterBlock = () => (
     <div style={{ marginTop: 32, paddingTop: 20, borderTop: `1px solid #E5E7EB` }}>
       {invoice.piePagina && <p style={{ fontSize: 10, color: "#9CA3AF", lineHeight: 1.7, whiteSpace: "pre-line", marginBottom: 8, fontFamily: fonts.body }}>{invoice.piePagina}</p>}
     </div>
   );
 
-  // ── Base container ──
   const containerStyle = {
     background: "#fff",
     color: "#111827",
@@ -381,8 +369,6 @@ function InvoiceEngine({ invoice, empresa, forExport = false, qrDataUrl = null }
     minHeight: forExport ? 1050 : "auto",
     fontFamily: fonts.body,
   };
-
-  // ─── LAYOUT RENDERERS ───────────────────────────────────────────────────────
 
   if (layout?.id === "bold-header") {
     return (
@@ -525,7 +511,7 @@ function InvoiceEngine({ invoice, empresa, forExport = false, qrDataUrl = null }
         <div style={{ padding: "44px 48px" }}>
           <div style={{ display: "flex", gap: 40, marginBottom: 36, paddingBottom: 28, borderBottom: `2px solid ${palette.primary}` }}>
             <div style={{ background: palette.primary, padding: 12, borderRadius: br, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <QRSvg id={invoice.id} size={110} color="#fff" />
+              <QRBlock size={110} />
             </div>
             <div style={{ flex: 1 }}>
               <LogoBlock size={48} />
@@ -573,7 +559,7 @@ function InvoiceEngine({ invoice, empresa, forExport = false, qrDataUrl = null }
     );
   }
 
-  // DEFAULT — "classic": Logo arriba · QR abajo
+  // DEFAULT — "classic"
   return (
     <div style={containerStyle}>
       <div style={{ padding: "44px 48px" }}>
@@ -602,38 +588,55 @@ function InvoiceEngine({ invoice, empresa, forExport = false, qrDataUrl = null }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PDF EXPORT — html2canvas → jsPDF (800px fixed width, white background)
+// PDF EXPORT — SECUENCIA PROTEGIDA CON QR CIEGO
 // ─────────────────────────────────────────────────────────────────────────────
-async function exportInvoicePDF(invoice, empresa, toast) {
-  // Pre-generar QR data URL antes de renderizar (evita que html2canvas lo capture en blanco)
-  const qrUrl = `https://facturaspanel.vercel.app/f/${invoice.id}`;
+// El valor ciego es denso y parece real pero no lleva a ningún sitio.
+// Nunca está vacío para que el QR tenga aspecto legítimo en el PDF.
+const BLIND_QR_VALUE = "REF-ID-AUTH-SECURE-INV-8829-XAUTH-PANEL-PRIVADO-NO-SCAN-CF2025";
+
+async function exportInvoicePDF(invoice, empresa, toast, setIsExporting) {
   const dna = empresa.config_diseno;
   const qrColor = dna?.palette?.primary || "#111827";
-  let qrDataUrl = "";
+
+  // ── PASO 1: Activar modo exportación → QR ciego ──
+  setIsExporting(true);
+
+  // ── PASO 2: Generar QR ciego (denso, parece real, no lleva a ningún lado) ──
+  let blindQrDataUrl = "";
   try {
-    qrDataUrl = await QRCode.toDataURL(qrUrl, {
+    blindQrDataUrl = await QRCode.toDataURL(BLIND_QR_VALUE, {
       width: 320,
       margin: 1,
       color: { dark: qrColor, light: "#ffffff" },
-      errorCorrectionLevel: "M",
+      errorCorrectionLevel: "H", // Alta densidad → más módulos → más "real"
     });
-  } catch (e) { console.warn("QR pre-gen error:", e); }
+  } catch (e) { console.warn("QR blind gen error:", e); }
 
-  // Dynamic imports so bundle stays lean when not used
+  // ── PASO 3: Pequeño retraso para asegurar que React re-renderizó ──
+  await new Promise(r => setTimeout(r, 120));
+
+  // Dynamic imports
   const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
     import("html2canvas"),
     import("jspdf"),
   ]);
 
-  // Create off-screen container at fixed 800px width
+  // Contenedor off-screen a 800px fijo
   const container = document.createElement("div");
   container.style.cssText = "position:fixed;left:-9999px;top:0;width:800px;background:#fff;z-index:-1;";
   document.body.appendChild(container);
 
-  // Render InvoiceEngine con el QR ya pre-generado
+  // Renderizar InvoiceEngine con el QR ciego pre-generado
   const { createRoot } = await import("react-dom/client");
   const root = createRoot(container);
-  root.render(<InvoiceEngine invoice={invoice} empresa={empresa} forExport={true} qrDataUrl={qrDataUrl} />);
+  root.render(
+    <InvoiceEngine
+      invoice={invoice}
+      empresa={empresa}
+      forExport={true}
+      qrDataUrl={blindQrDataUrl}   // ← QR CIEGO: denso pero no funcional
+    />
+  );
 
   // Esperar a que React renderice
   await new Promise(r => setTimeout(r, 400));
@@ -660,11 +663,13 @@ async function exportInvoicePDF(invoice, empresa, toast) {
   } finally {
     root.unmount();
     document.body.removeChild(container);
+    // ── PASO 4: Restaurar QR real en la vista web ──
+    setIsExporting(false);
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// INVOICE PREVIEW MODAL (uses InvoiceEngine)
+// INVOICE PREVIEW MODAL
 // ─────────────────────────────────────────────────────────────────────────────
 function InvoicePreviewModal({ invoice, empresa, onClose, onPDF, pdfLoading }) {
   const qrUrl = `https://facturaspanel.vercel.app/f/${invoice.id}`;
@@ -679,13 +684,11 @@ function InvoicePreviewModal({ invoice, empresa, onClose, onPDF, pdfLoading }) {
             <button className="btn-secondary" onClick={() => navigator.clipboard?.writeText(qrUrl)} style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <Copy size={13} /> Copiar enlace QR
             </button>
-
             <button className="btn-primary" onClick={onPDF} disabled={pdfLoading} style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <Download size={13} /> {pdfLoading ? "Generando…" : "Descargar PDF"}
             </button>
           </div>
         </div>
-        {/* DNA badge */}
         {empresa.config_diseno && (
           <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
             {[
@@ -699,6 +702,7 @@ function InvoicePreviewModal({ invoice, empresa, onClose, onPDF, pdfLoading }) {
             ))}
           </div>
         )}
+        {/* Vista previa siempre con QR REAL (isExporting no afecta a este modal) */}
         <div style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.2)", borderRadius: 4, overflow: "hidden" }} id="a4-print">
           <InvoiceEngine invoice={invoice} empresa={empresa} />
         </div>
@@ -708,7 +712,7 @@ function InvoicePreviewModal({ invoice, empresa, onClose, onPDF, pdfLoading }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// COMPANY CARD (shows DNA accent color)
+// COMPANY CARD
 // ─────────────────────────────────────────────────────────────────────────────
 function EmpresaCard({ empresa, invoiceCount, emitedCount, onEnter, onDelete, delay }) {
   const dna = empresa.config_diseno;
@@ -717,7 +721,6 @@ function EmpresaCard({ empresa, invoiceCount, emitedCount, onEnter, onDelete, de
 
   return (
     <div className="empresa-card" style={{ animationDelay: `${delay}ms` }}>
-      {/* DNA color strip */}
       {dna && <div style={{ height: 4, background: `linear-gradient(90deg, ${primaryColor}, ${accentColor})`, borderRadius: "14px 14px 0 0", margin: "-20px -20px 16px" }} />}
       <div className="empresa-card-header">
         <div className="empresa-avatar" style={{ background: dna ? `${primaryColor}18` : "var(--accent-light)", color: dna ? primaryColor : "var(--accent)" }}>
@@ -746,7 +749,7 @@ function EmpresaCard({ empresa, invoiceCount, emitedCount, onEnter, onDelete, de
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// COMPANY FORM MODAL (generates DNA on save)
+// COMPANY FORM MODAL
 // ─────────────────────────────────────────────────────────────────────────────
 function EmpresaFormModal({ empresa, onChange, onSave, onCancel }) {
   const ref = useRef();
@@ -818,7 +821,6 @@ function InvoiceEditor({ invoice, empresa, onChange, onPersist, onEmit, onPrevie
   const addL = () => onChange({ ...invoice, lineas: [...invoice.lineas, emptyLine()] });
   const delL = id => onChange({ ...invoice, lineas: invoice.lineas.filter(l => l.id !== id) });
 
-  // Autosave hook — only active when not locked
   const liveInvoice = locked ? null : invoice;
   const saveStatus = useAutosaveInvoice(liveInvoice, onPersist);
 
@@ -856,13 +858,11 @@ function InvoiceEditor({ invoice, empresa, onChange, onPersist, onEmit, onPrevie
         </div>
       )}
 
-      {/* DNA strip */}
       {dna && (
         <div style={{ height: 3, background: `linear-gradient(90deg, ${dna.palette.primary}, ${accentColor}, ${dna.palette.primary})` }} />
       )}
 
       <div className="editor-body">
-        {/* Invoice data */}
         <div className="editor-section">
           <p className="section-label">Datos de la factura</p>
           <div className="form-grid">
@@ -876,7 +876,6 @@ function InvoiceEditor({ invoice, empresa, onChange, onPersist, onEmit, onPrevie
           </div>
         </div>
 
-        {/* Client */}
         <div className="editor-section">
           <p className="section-label">Datos del cliente</p>
           <div className="form-grid">
@@ -886,7 +885,6 @@ function InvoiceEditor({ invoice, empresa, onChange, onPersist, onEmit, onPrevie
           </div>
         </div>
 
-        {/* Lines */}
         <div className="editor-section">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <p className="section-label" style={{ margin: 0 }}>Conceptos</p>
@@ -929,7 +927,6 @@ function InvoiceEditor({ invoice, empresa, onChange, onPersist, onEmit, onPrevie
           </div>
         </div>
 
-        {/* QR (emitted) */}
         {locked && (
           <div className="editor-section">
             <p className="section-label">Código QR de verificación</p>
@@ -949,7 +946,6 @@ function InvoiceEditor({ invoice, empresa, onChange, onPersist, onEmit, onPrevie
           </div>
         )}
 
-        {/* Footer */}
         <div className="editor-section">
           <p className="section-label">Pie de página</p>
           <textarea className="input" rows={3} style={{ resize: "none", width: "100%" }} value={invoice.piePagina || ""} onChange={e => setF("piePagina", e.target.value)} disabled={locked} placeholder="Condiciones de pago, IBAN, notas de agradecimiento..." />
@@ -1044,7 +1040,6 @@ function SettingsPanel({ empresa, onChange, onSave, onRegenDNA }) {
           </div>
         </div>
 
-        {/* DNA panel */}
         {dna && (
           <div className="editor-section" style={{ maxWidth: 560 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
@@ -1076,10 +1071,6 @@ function SettingsPanel({ empresa, onChange, onSave, onRegenDNA }) {
     </div>
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIN APP
-// ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LOGIN SCREEN
@@ -1124,14 +1115,22 @@ function LoginScreen({ onLogin, error, loading }) {
   )
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN APP
+// ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
   const { toasts, add: toast } = useToast()
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
+  // ── Auth ──
   const [session, setSession] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [authError, setAuthError] = useState(null)
   const [loginLoading, setLoginLoading] = useState(false)
+
+  // ── NUEVO: estado doble cara QR ──────────────────────────────────────────
+  // false  → vista web   → QR real y funcional
+  // true   → exportando  → QR ciego pre-generado (no lleva a ningún sitio)
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -1150,7 +1149,6 @@ export default function App() {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) { setAuthError(error.message); return }
-      // Verify whitelist
       const { data: allowed } = await supabase
         .from("usuarios_autorizados")
         .select("activo")
@@ -1199,7 +1197,6 @@ export default function App() {
           supabase.from("facturas").select("*").eq("user_id", userId).order("created_at"),
         ]);
         setEmpresas(emps || []);
-        // Normalizar facturas: convertir snake_case de Supabase → camelCase del frontend
         setFacturas((facts || []).map(f => ({
           id: f.id,
           empresaId: f.empresa_id,
@@ -1222,7 +1219,6 @@ export default function App() {
     cargarDatos();
   }, [session]);
 
-  // Guardar modo oscuro en localStorage (preferencia local)
   useEffect(() => {
     localStorage.setItem("cf_dark", JSON.stringify(dark));
   }, [dark]);
@@ -1232,7 +1228,6 @@ export default function App() {
   const activeFactura = facturas.find(f => f.id === activeFacturaId);
   const isLocked = activeFactura?.estado === "Emitida";
 
-  // ── All hooks must be declared before any conditional return ────────────────
   const handleAutoPersist = useCallback(async (invoice) => {
     setFacturas(p => p.map(f => f.id === invoice.id ? invoice : f));
     try {
@@ -1258,7 +1253,7 @@ export default function App() {
 
   const filteredEmpresas = empresas.filter(e => e.nombre.toLowerCase().includes(dirSearch.toLowerCase()));
 
-  // ── Auth guards (AFTER all hooks) ────────────────────────────────────────────
+  // ── Auth guards (AFTER all hooks) ──
   if (authLoading || (session && dbLoading)) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#F9FAFB", fontFamily: "sans-serif", flexDirection: "column", gap: 12 }}>
       <div style={{ width: 32, height: 32, border: "3px solid #E5E7EB", borderTopColor: "#2563EB", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
@@ -1280,7 +1275,6 @@ export default function App() {
     if (!editingEmpresa?.nombre?.trim()) return;
     const userId = session.user.id;
     if (editingEmpresa.id) {
-      // Update
       const updated = { ...editingEmpresa };
       setEmpresas(p => p.map(e => e.id === updated.id ? updated : e));
       await supabase.from("empresas").update({
@@ -1348,7 +1342,6 @@ export default function App() {
     const updated = { ...factura, estado: "Emitida" };
     setFacturas(p => p.map(f => f.id === activeFacturaId ? updated : f));
     const { subtotal, totalIva: iva, total } = calcTotals(updated.lineas || []);
-    // Guardar snapshot de la empresa para que el QR público siempre muestre los datos correctos
     const snapshot = {
       nombre: empresa.nombre, nif: empresa.nif,
       direccion: empresa.direccion, logo_url: empresa.logo,
@@ -1374,12 +1367,15 @@ export default function App() {
     toast("Factura eliminada", "info");
   };
 
+  // ── HANDLER PDF: usa la secuencia protegida con QR ciego ─────────────────
   const handlePDF = async () => {
     const f = facturas.find(x => x.id === previewFactura);
     const e = empresas.find(x => x.id === f?.empresaId);
     if (!f || !e) return;
     setPdfLoading(true);
-    await exportInvoicePDF(f, e, toast);
+    // exportInvoicePDF gestiona setIsExporting internamente:
+    //   true  → genera QR ciego → captura → false (restaura QR real)
+    await exportInvoicePDF(f, e, toast, setIsExporting);
     setPdfLoading(false);
   };
 
@@ -1524,25 +1520,16 @@ export default function App() {
         input[type=number]::-webkit-inner-spin-button { opacity: .3; }
         input[type=date]::-webkit-calendar-picker-indicator { opacity: .5; }
 
-        /* ─── MOBILE RESPONSIVE (desktop-first) ────────────────────────── */
-
-        /* Hamburger button — hidden on desktop */
+        /* ─── MOBILE RESPONSIVE ────────────────────────── */
         .mob-menu-btn { display: none; }
-
-        /* Sidebar overlay backdrop */
         .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 29; }
 
         @media (max-width: 768px) {
-          /* Topbar */
           .topbar { padding: 0 14px; }
           .topbar-brand { font-size: 14px; }
           .mob-menu-btn { display: flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; color: var(--text-secondary); padding: 6px; border-radius: 8px; }
           .mob-menu-btn:hover { background: var(--surface2); }
-
-          /* Layout */
           .app { flex-direction: column; }
-
-          /* Sidebar becomes a drawer */
           .sidebar {
             position: fixed !important;
             top: 0; left: 0; bottom: 0;
@@ -1554,50 +1541,31 @@ export default function App() {
           }
           .sidebar.open { transform: translateX(0); }
           .sidebar-overlay.open { display: block; }
-
-          /* Directory page */
           .directory { padding: 16px; }
           .directory-header { flex-direction: column; gap: 12px; align-items: stretch; }
           .dir-search { min-width: unset; width: 100%; }
           .empresa-grid { grid-template-columns: 1fr; }
-
-          /* Invoice list */
           .list-topbar { padding: 16px 16px 10px; flex-wrap: wrap; gap: 10px; }
           .search-row { padding: 0 16px 12px; }
           .search-box { max-width: 100%; }
           .invoice-table-wrap { padding: 0 16px 20px; }
-          /* Hide less critical table columns on mobile */
           .invoice-table th:nth-child(3),
           .invoice-table td:nth-child(3),
           .invoice-table th:nth-child(4),
           .invoice-table td:nth-child(4) { display: none; }
-
-          /* Editor */
           .editor-topbar { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
           .editor-body { padding: 14px; gap: 14px; }
           .editor-section { padding: 14px; }
           .form-grid { grid-template-columns: 1fr; }
           .field[style*="gridColumn"] { grid-column: 1 !important; }
-
-          /* Lines table on mobile — horizontal scroll */
           .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
           .lines-table { min-width: 520px; }
-
-          /* Totals block full width */
           .totals-block { width: 100%; }
-
-          /* Modals */
           .modal-box { padding: 20px 16px; margin: 0 8px; }
           .modal-box[style*="width: 440px"] { width: auto !important; }
-
-          /* Invoice preview modal */
           .modal-backdrop { padding: 0; align-items: flex-start !important; }
-
-          /* QR URL row */
           .qr-url-row { flex-wrap: wrap; }
           .qr-url { font-size: 10px; word-break: break-all; }
-
-          /* Buttons: smaller on mobile */
           .btn-primary, .btn-secondary { padding: 7px 12px; font-size: 12px; }
           .list-topbar .btn-primary { width: 100%; justify-content: center; }
         }
@@ -1607,7 +1575,6 @@ export default function App() {
           .empresa-grid { grid-template-columns: 1fr; }
           .editor-topbar > div:first-child { width: 100%; }
           .editor-topbar > div:last-child { width: 100%; justify-content: flex-end; }
-          /* Stack invoice table actions */
           .invoice-table th:nth-child(5),
           .invoice-table td:nth-child(5) { display: none; }
         }
@@ -1679,15 +1646,12 @@ export default function App() {
 
         <div style={{ display: "flex", flex: 1, marginTop: 56, overflow: "hidden", height: "calc(100vh - 56px)" }}>
 
-          {/* Sidebar overlay for mobile */}
           {activeEmpresa && (
             <div className={`sidebar-overlay ${sidebarOpen ? "open" : ""}`} onClick={() => setSidebarOpen(false)} />
           )}
 
-          {/* Sidebar */}
           {activeEmpresa && (
             <div className={`sidebar ${sidebarOpen ? "open" : ""}`}>
-              {/* DNA color strip */}
               {activeEmpresa.config_diseno && (
                 <div style={{ height: 3, background: `linear-gradient(90deg, ${activeEmpresa.config_diseno.palette.primary}, ${activeEmpresa.config_diseno.palette.accent})` }} />
               )}
