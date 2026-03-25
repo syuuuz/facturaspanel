@@ -613,7 +613,7 @@ async function exportInvoicePDF(invoice, empresa, toast, setIsExporting) {
   } catch (e) { console.warn("QR blind gen error:", e); }
 
   // ── PASO 3: Pequeño retraso para asegurar que React re-renderizó ──
-  await new Promise(r => setTimeout(r, 120));
+  await new Promise(r => setTimeout(r, 200));
 
   // Dynamic imports
   const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
@@ -638,8 +638,23 @@ async function exportInvoicePDF(invoice, empresa, toast, setIsExporting) {
     />
   );
 
-  // Esperar a que React renderice
-  await new Promise(r => setTimeout(r, 400));
+  // Esperar a que React renderice el árbol inicial
+  await new Promise(r => setTimeout(r, 600));
+
+  // Esperar a que TODAS las imágenes del contenedor estén completamente cargadas
+  // Esto garantiza que el QR (que es un <img src="data:..."> ) esté pintado
+  // antes de que html2canvas haga la captura
+  await Promise.all(
+    Array.from(container.querySelectorAll("img")).map(img => {
+      if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+      return new Promise(resolve => {
+        img.onload = resolve;
+        img.onerror = resolve; // si falla, seguimos igualmente
+        // Safety timeout: si la imagen no carga en 2s, continuamos
+        setTimeout(resolve, 2000);
+      });
+    })
+  );
 
   try {
     const canvas = await html2canvas(container, {
