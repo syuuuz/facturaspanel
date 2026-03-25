@@ -274,8 +274,6 @@ function InvoiceEngine({ invoice, empresa, forExport = false, qrDataUrl = null }
     </div>
   );
 
-  // ── QR Block: usa qrDataUrl si se pasó (para exportación con QR ciego),
-  //    si no, muestra el QR real funcional
   const QRBlock = ({ size = 80 }) => (
     <div style={{ textAlign: "center" }}>
       <div style={{ background: "#fff", padding: 6, borderRadius: 8, display: "inline-block", border: "1px solid #E5E7EB" }}>
@@ -588,69 +586,50 @@ function InvoiceEngine({ invoice, empresa, forExport = false, qrDataUrl = null }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PDF EXPORT — SECUENCIA PROTEGIDA CON QR CIEGO
+// PDF EXPORT
 // ─────────────────────────────────────────────────────────────────────────────
-// El valor ciego es denso y parece real pero no lleva a ningún sitio.
-// Nunca está vacío para que el QR tenga aspecto legítimo en el PDF.
 const BLIND_QR_VALUE = "REF-ID-AUTH-SECURE-INV-8829-XAUTH-PANEL-PRIVADO-NO-SCAN-CF2025";
 
 async function exportInvoicePDF(invoice, empresa, toast, setIsExporting) {
   const dna = empresa.config_diseno;
   const qrColor = dna?.palette?.primary || "#111827";
 
-  // ── PASO 1: Activar modo exportación → QR ciego ──
   setIsExporting(true);
 
-  // ── PASO 2: Generar QR ciego (denso, parece real, no lleva a ningún lado) ──
   let blindQrDataUrl = "";
   try {
     blindQrDataUrl = await QRCode.toDataURL(BLIND_QR_VALUE, {
-      width: 320,
-      margin: 1,
+      width: 320, margin: 1,
       color: { dark: qrColor, light: "#ffffff" },
-      errorCorrectionLevel: "H", // Alta densidad → más módulos → más "real"
+      errorCorrectionLevel: "H",
     });
   } catch (e) { console.warn("QR blind gen error:", e); }
 
-  // ── PASO 3: Pequeño retraso para asegurar que React re-renderizó ──
   await new Promise(r => setTimeout(r, 200));
 
-  // Dynamic imports
   const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
     import("html2canvas"),
     import("jspdf"),
   ]);
 
-  // Contenedor off-screen a 800px fijo
   const container = document.createElement("div");
   container.style.cssText = "position:fixed;left:-9999px;top:0;width:800px;background:#fff;z-index:-1;";
   document.body.appendChild(container);
 
-  // Renderizar InvoiceEngine con el QR ciego pre-generado
   const { createRoot } = await import("react-dom/client");
   const root = createRoot(container);
   root.render(
-    <InvoiceEngine
-      invoice={invoice}
-      empresa={empresa}
-      forExport={true}
-      qrDataUrl={blindQrDataUrl}   // ← QR CIEGO: denso pero no funcional
-    />
+    <InvoiceEngine invoice={invoice} empresa={empresa} forExport={true} qrDataUrl={blindQrDataUrl} />
   );
 
-  // Esperar a que React renderice el árbol inicial
   await new Promise(r => setTimeout(r, 600));
 
-  // Esperar a que TODAS las imágenes del contenedor estén completamente cargadas
-  // Esto garantiza que el QR (que es un <img src="data:..."> ) esté pintado
-  // antes de que html2canvas haga la captura
   await Promise.all(
     Array.from(container.querySelectorAll("img")).map(img => {
       if (img.complete && img.naturalWidth > 0) return Promise.resolve();
       return new Promise(resolve => {
         img.onload = resolve;
-        img.onerror = resolve; // si falla, seguimos igualmente
-        // Safety timeout: si la imagen no carga en 2s, continuamos
+        img.onerror = resolve;
         setTimeout(resolve, 2000);
       });
     })
@@ -658,13 +637,8 @@ async function exportInvoicePDF(invoice, empresa, toast, setIsExporting) {
 
   try {
     const canvas = await html2canvas(container, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: "#ffffff",
-      width: 800,
-      windowWidth: 800,
+      scale: 2, useCORS: true, backgroundColor: "#ffffff", width: 800, windowWidth: 800,
     });
-
     const imgData = canvas.toDataURL("image/png");
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const pdfW = pdf.internal.pageSize.getWidth();
@@ -678,7 +652,6 @@ async function exportInvoicePDF(invoice, empresa, toast, setIsExporting) {
   } finally {
     root.unmount();
     document.body.removeChild(container);
-    // ── PASO 4: Restaurar QR real en la vista web ──
     setIsExporting(false);
   }
 }
@@ -717,7 +690,6 @@ function InvoicePreviewModal({ invoice, empresa, onClose, onPDF, pdfLoading }) {
             ))}
           </div>
         )}
-        {/* Vista previa siempre con QR REAL (isExporting no afecta a este modal) */}
         <div style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.2)", borderRadius: 4, overflow: "hidden" }} id="a4-print">
           <InvoiceEngine invoice={invoice} empresa={empresa} />
         </div>
@@ -1022,66 +994,221 @@ function InvoiceList({ facturas, onSelect, onNew, onDelete }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SETTINGS PANEL
+// SETTINGS PANEL — con edición manual completa del ADN Visual
 // ─────────────────────────────────────────────────────────────────────────────
 function SettingsPanel({ empresa, onChange, onSave, onRegenDNA }) {
   const [local, setLocal] = useState({ ...empresa });
   const ref = useRef();
+
   const handleFile = e => {
     const f = e.target.files?.[0]; if (!f) return;
-    const r = new FileReader(); r.onload = ev => setLocal(p => ({ ...p, logo: ev.target.result })); r.readAsDataURL(f);
+    const r = new FileReader();
+    r.onload = ev => setLocal(p => ({ ...p, logo: ev.target.result }));
+    r.readAsDataURL(f);
   };
+
   const dna = local.config_diseno;
+
+  // Helper para actualizar un campo del ADN
+  const setDna = (field, value) => {
+    setLocal(p => ({
+      ...p,
+      config_diseno: { ...p.config_diseno, [field]: value }
+    }));
+  };
+
+  const setDnaPalette = (key, value) => {
+    setLocal(p => ({
+      ...p,
+      config_diseno: {
+        ...p.config_diseno,
+        palette: { ...p.config_diseno.palette, [key]: value }
+      }
+    }));
+  };
 
   return (
     <div className="list-wrap">
       <div className="list-topbar">
-        <div><h2 className="page-title">Configuración</h2><p className="page-subtitle">Datos de la empresa emisora</p></div>
+        <div>
+          <h2 className="page-title">Configuración</h2>
+          <p className="page-subtitle">Datos de la empresa emisora</p>
+        </div>
         <button className="btn-primary" onClick={() => { onChange(local); onSave(); }}>Guardar cambios</button>
       </div>
+
       <div style={{ padding: "0 28px", display: "flex", flexDirection: "column", gap: 20 }}>
+
+        {/* ── Datos de la empresa ── */}
         <div className="editor-section" style={{ maxWidth: 560 }}>
           <p className="section-label">Datos de la empresa</p>
           <div className="form-grid">
-            <div className="field"><label className="label">Nombre *</label><input className="input" value={local.nombre || ""} onChange={e => setLocal(p => ({ ...p, nombre: e.target.value }))} /></div>
-            <div className="field"><label className="label">NIF / CIF</label><input className="input" value={local.nif || ""} onChange={e => setLocal(p => ({ ...p, nif: e.target.value }))} /></div>
-            <div className="field" style={{ gridColumn: "1/-1" }}><label className="label">Dirección</label><textarea className="input" rows={3} style={{ resize: "none" }} value={local.direccion || ""} onChange={e => setLocal(p => ({ ...p, direccion: e.target.value }))} /></div>
+            <div className="field">
+              <label className="label">Nombre *</label>
+              <input className="input" value={local.nombre || ""} onChange={e => setLocal(p => ({ ...p, nombre: e.target.value }))} />
+            </div>
+            <div className="field">
+              <label className="label">NIF / CIF</label>
+              <input className="input" value={local.nif || ""} onChange={e => setLocal(p => ({ ...p, nif: e.target.value }))} />
+            </div>
+            <div className="field" style={{ gridColumn: "1/-1" }}>
+              <label className="label">Dirección</label>
+              <textarea className="input" rows={3} style={{ resize: "none" }} value={local.direccion || ""} onChange={e => setLocal(p => ({ ...p, direccion: e.target.value }))} />
+            </div>
             <div className="field" style={{ gridColumn: "1/-1" }}>
               <label className="label">Logo de la empresa</label>
               <input ref={ref} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFile} />
-              <button className="btn-secondary" onClick={() => ref.current?.click()} style={{ display: "flex", alignItems: "center", gap: 6 }}><Upload size={13} /> {local.logo ? "Cambiar logo" : "Subir logo"}</button>
+              <button className="btn-secondary" onClick={() => ref.current?.click()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <Upload size={13} /> {local.logo ? "Cambiar logo" : "Subir logo"}
+              </button>
               {local.logo && <img src={local.logo} alt="" style={{ marginTop: 10, height: 44, objectFit: "contain", borderRadius: 6 }} />}
             </div>
           </div>
         </div>
 
+        {/* ── ADN Visual editable ── */}
         {dna && (
           <div className="editor-section" style={{ maxWidth: 560 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
               <p className="section-label" style={{ margin: 0 }}>ADN Visual</p>
-              <button className="btn-secondary" onClick={() => { const nd = generateCompanyVisualDNA(); setLocal(p => ({ ...p, config_diseno: nd })); onRegenDNA(nd); }} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12 }}>
+              <button
+                className="btn-secondary"
+                onClick={() => {
+                  const nd = generateCompanyVisualDNA();
+                  setLocal(p => ({ ...p, config_diseno: nd }));
+                  onRegenDNA(nd);
+                }}
+                style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12 }}
+              >
                 <Wand2 size={12} /> Regenerar ADN
               </button>
             </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-              <div style={{ width: 32, height: 32, background: dna.palette.primary, borderRadius: 8, border: "2px solid var(--border)" }} title={`Primary: ${dna.palette.primary}`} />
-              <div style={{ width: 32, height: 32, background: dna.palette.accent, borderRadius: 8, border: "2px solid var(--border)" }} title={`Accent: ${dna.palette.accent}`} />
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              {[
-                ["Layout", dna.layout?.desc],
-                ["Tipografía", dna.fonts?.type],
-                ["Tabla", dna.tableStyle?.desc],
-                ["Radio borde", `${dna.borderRadius}px`],
-              ].map(([k, v]) => (
-                <div key={k} style={{ background: "var(--surface2)", borderRadius: 8, padding: "8px 12px", border: "1px solid var(--border)" }}>
-                  <p style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 1 }}>{k}</p>
-                  <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", marginTop: 2 }}>{v}</p>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+              {/* Colores */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                <div className="field">
+                  <label className="label">Color principal</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="color"
+                      value={dna.palette.primary}
+                      onChange={e => setDnaPalette("primary", e.target.value)}
+                      style={{ width: 40, height: 36, padding: 2, borderRadius: 6, border: "1px solid var(--border)", cursor: "pointer", background: "var(--surface)" }}
+                    />
+                    <input
+                      className="input"
+                      value={dna.palette.primary}
+                      onChange={e => setDnaPalette("primary", e.target.value)}
+                      placeholder="#1a1a2e"
+                      style={{ fontFamily: "monospace", fontSize: 12 }}
+                    />
+                  </div>
                 </div>
-              ))}
+
+                <div className="field">
+                  <label className="label">Color de acento</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="color"
+                      value={dna.palette.accent}
+                      onChange={e => setDnaPalette("accent", e.target.value)}
+                      style={{ width: 40, height: 36, padding: 2, borderRadius: 6, border: "1px solid var(--border)", cursor: "pointer", background: "var(--surface)" }}
+                    />
+                    <input
+                      className="input"
+                      value={dna.palette.accent}
+                      onChange={e => setDnaPalette("accent", e.target.value)}
+                      placeholder="#f48c06"
+                      style={{ fontFamily: "monospace", fontSize: 12 }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Preview de colores */}
+              <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "10px 14px", background: "var(--surface2)", borderRadius: 8, border: "1px solid var(--border)" }}>
+                <div style={{ width: 36, height: 36, background: dna.palette.primary, borderRadius: 8, flexShrink: 0, border: "2px solid var(--border)" }} />
+                <div style={{ width: 36, height: 36, background: dna.palette.accent, borderRadius: 8, flexShrink: 0, border: "2px solid var(--border)" }} />
+                <div style={{ flex: 1, height: 18, background: `linear-gradient(90deg, ${dna.palette.primary}, ${dna.palette.accent})`, borderRadius: 4 }} />
+              </div>
+
+              {/* Layout */}
+              <div className="field">
+                <label className="label">Layout</label>
+                <select
+                  className="input"
+                  value={dna.layout?.id || "classic"}
+                  onChange={e => {
+                    const found = LAYOUTS.find(l => l.id === e.target.value);
+                    setDna("layout", found);
+                  }}
+                >
+                  {LAYOUTS.map(l => (
+                    <option key={l.id} value={l.id}>{l.desc}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Tipografía */}
+              <div className="field">
+                <label className="label">Tipografía</label>
+                <select
+                  className="input"
+                  value={dna.fonts?.type || "moderno"}
+                  onChange={e => {
+                    const found = FONT_PAIRS.find(f => f.type === e.target.value);
+                    setDna("fonts", found);
+                  }}
+                >
+                  {FONT_PAIRS.map(f => (
+                    <option key={f.type} value={f.type}>{f.type}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Estilo de tabla */}
+              <div className="field">
+                <label className="label">Estilo de tabla</label>
+                <select
+                  className="input"
+                  value={dna.tableStyle?.id || "zebra"}
+                  onChange={e => {
+                    const found = TABLE_STYLES.find(t => t.id === e.target.value);
+                    setDna("tableStyle", found);
+                  }}
+                >
+                  {TABLE_STYLES.map(t => (
+                    <option key={t.id} value={t.id}>{t.desc}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Radio de borde */}
+              <div className="field">
+                <label className="label">Radio de borde — {dna.borderRadius}px</label>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <input
+                    type="range"
+                    min={0}
+                    max={24}
+                    step={2}
+                    value={dna.borderRadius}
+                    onChange={e => setDna("borderRadius", parseInt(e.target.value))}
+                    style={{ flex: 1, accentColor: dna.palette.primary }}
+                  />
+                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", minWidth: 36, textAlign: "right" }}>{dna.borderRadius}px</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
+                  <span>Cuadrado</span><span>Redondeado</span>
+                </div>
+              </div>
+
             </div>
           </div>
         )}
+
       </div>
     </div>
   );
@@ -1136,15 +1263,10 @@ function LoginScreen({ onLogin, error, loading }) {
 export default function App() {
   const { toasts, add: toast } = useToast()
 
-  // ── Auth ──
   const [session, setSession] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [authError, setAuthError] = useState(null)
   const [loginLoading, setLoginLoading] = useState(false)
-
-  // ── NUEVO: estado doble cara QR ──────────────────────────────────────────
-  // false  → vista web   → QR real y funcional
-  // true   → exportando  → QR ciego pre-generado (no lleva a ningún sitio)
   const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
@@ -1200,7 +1322,6 @@ export default function App() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // ── Cargar desde Supabase al hacer login ──
   useEffect(() => {
     if (!session) return;
     async function cargarDatos() {
@@ -1268,7 +1389,6 @@ export default function App() {
 
   const filteredEmpresas = empresas.filter(e => e.nombre.toLowerCase().includes(dirSearch.toLowerCase()));
 
-  // ── Auth guards (AFTER all hooks) ──
   if (authLoading || (session && dbLoading)) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#F9FAFB", fontFamily: "sans-serif", flexDirection: "column", gap: 12 }}>
       <div style={{ width: 32, height: 32, border: "3px solid #E5E7EB", borderTopColor: "#2563EB", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
@@ -1382,14 +1502,11 @@ export default function App() {
     toast("Factura eliminada", "info");
   };
 
-  // ── HANDLER PDF: usa la secuencia protegida con QR ciego ─────────────────
   const handlePDF = async () => {
     const f = facturas.find(x => x.id === previewFactura);
     const e = empresas.find(x => x.id === f?.empresaId);
     if (!f || !e) return;
     setPdfLoading(true);
-    // exportInvoicePDF gestiona setIsExporting internamente:
-    //   true  → genera QR ciego → captura → false (restaura QR real)
     await exportInvoicePDF(f, e, toast, setIsExporting);
     setPdfLoading(false);
   };
@@ -1535,7 +1652,6 @@ export default function App() {
         input[type=number]::-webkit-inner-spin-button { opacity: .3; }
         input[type=date]::-webkit-calendar-picker-indicator { opacity: .5; }
 
-        /* ─── MOBILE RESPONSIVE ────────────────────────── */
         .mob-menu-btn { display: none; }
         .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 29; }
 
@@ -1636,7 +1752,6 @@ export default function App() {
       )}
 
       <div className={`app ${dark ? "dark" : ""}`} style={{ background: "var(--bg)" }}>
-        {/* Topbar */}
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 10 }}>
           <div className="topbar">
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -1700,7 +1815,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Main content */}
           <div className="main" style={{ background: "var(--bg)" }}>
             {!activeEmpresa ? (
               <div className="directory">
